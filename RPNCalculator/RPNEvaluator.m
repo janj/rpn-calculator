@@ -30,20 +30,36 @@
     return operatorDict;
 }
 
++(NSDictionary*)stackOperatorDict{
+    NSMutableDictionary *stackOperators = [NSMutableDictionary dictionary];
+    
+    [stackOperators setObject:[^ double (NSArray *operands) {
+        double total = 0;
+        for(NSNumber *operand in operands){
+            total += operand.doubleValue;
+        }
+        return total;
+    } copy] forKey:@"SUM"];
+    
+    return stackOperators;
+}
+
 // Evaluates the rpn string and retuns the result if there is no error, returns nil if there is an error
 +(NSNumber*)evaluateString:(NSString *)rpnString error:(NSError**)error{
     NSArray *parts = [rpnString componentsSeparatedByString:@" "];
     NSNumberFormatter *numberFormatter = [[NSNumberFormatter alloc] init];
     NSMutableArray *stack = [NSMutableArray arrayWithCapacity:parts.count];
-    NSDictionary* operators = [RPNEvaluator operatorDict];
+    NSDictionary *binaryOperators = [RPNEvaluator operatorDict];
+    NSDictionary *stackOperators = [RPNEvaluator stackOperatorDict];
     
     for(NSString* token in parts){
+        NSString *uppercaseToken = token.uppercaseString;
         NSNumber *num = [numberFormatter numberFromString:token];
         if(nil != num){
             // found a number
             [stack addObject:num];
         }
-        else if(nil != [operators objectForKey:token]){
+        else if(nil != [binaryOperators objectForKey:token]){
             // found an operator
             NSNumber *secondOperand = [stack lastObject];
             [stack removeLastObject];
@@ -51,7 +67,7 @@
             [stack removeLastObject];
             
             if(nil != firstOperand && nil != secondOperand){
-                double (^operator)(double, double) = [operators objectForKey:token];
+                double (^operator)(double, double) = [binaryOperators objectForKey:token];
                 
                 [stack addObject:[NSNumber numberWithDouble:operator(firstOperand.doubleValue, secondOperand.doubleValue)]];
             }
@@ -60,6 +76,12 @@
                 *error = [NSError errorWithDomain:@"rpn" code:MISSING_ARGUMENTS_ERROR userInfo:@{NSLocalizedDescriptionKey:@"not enough arguments"}];
                 return nil;
             }
+        }
+        else if(nil != [stackOperators objectForKey:uppercaseToken]){
+            double (^stackOperator)(NSArray *stack) = [stackOperators objectForKey:uppercaseToken];
+            double result = stackOperator(stack);
+            [stack removeAllObjects];
+            [stack addObject:@(result)];
         }
         else{
             // invalid number
